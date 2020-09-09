@@ -47,6 +47,6 @@ class MyCrawler(MicroCrawler):
 
 if __name__=="__main__":
     mw = MyCrawler(write_key=MY_MUID)
-    crawler.set_repository(
+    mw.set_repository(
         url='https://github.com//spikeshr/microprediction/blob/master/Fledge_Goat.py')
     mw.run()
