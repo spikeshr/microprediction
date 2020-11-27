@@ -1,4 +1,4 @@
-MY_MUID = 'YOUR MUID KEY' #update this yourself
+MY_MUID = 'INSERT YOUR MUID HERE'
 from microprediction import MicroCrawler
 import numpy as np
 from statsmodels.tsa.arima.model import ARIMA
@@ -10,11 +10,11 @@ from sklearn.metrics import mean_squared_error
 class MyCrawler(MicroCrawler):
 
     def __init__(self,write_key):
-        super().__init__(stop_loss=3.0,min_lags=50,sleep_time=15*60,write_key=write_key,quietude=1,verbose=False)
+        super().__init__(stop_loss=3.0,min_lags=100,sleep_time=15*60,write_key=write_key,quietude=1,verbose=False)
 
 
-    def candidate_streams(self): # can use this to exclude troublesome streams, or just delete
-        bad_names = [] # enter some portion of the names of streams you want to exclude here
+    def candidate_streams(self):
+        bad_names = [] # can use this to exclude troublesome streams
         good_names = []
         candidate_names = [name for name, sponsor in self.get_streams_by_sponsor().items()] # if name[:1] != 'z' #exclude z streams
 
@@ -39,7 +39,7 @@ class MyCrawler(MicroCrawler):
     	predictions = list()
     	for t in range(len(test)):
     		model = ARIMA(history, order=arima_order)
-    		model_fit = model.fit(disp=0)
+    		model_fit = model.fit(disp=0) #If disp = 1 or True, convergence information is printed.
     		yhat = model_fit.forecast()[0]
     		predictions.append(yhat)
     		history.append(test[t])
@@ -66,23 +66,32 @@ class MyCrawler(MicroCrawler):
     def sample(self, lagged_values, lagged_times=None, **ignored ):
         """ Find Unique Values to see if outcomes are discrete or continuous """
         uniques = np.unique(lagged_values)
-        if len(uniques) < 0.3*len(lagged_values): #arbitrary cutoff of 30% to determine whether outcomes are continuous or quantized
-            v = [s for s in (np.random.choice(lagged_values, self.num_predictions))] #randomly select from the lagged values and return as answer
-        else:
+        rev_values = lagged_values[::-1]#list(reversed(lagged_values)) # our data are in reverse order, the ARIMA needs the opposite
 
+        if len(uniques) < 0.2*len(rev_values): #arbitrary cutoff of 20% to determine whether outcomes are continuous or quantized
+            prev_cases = [i+1 for i,x in enumerate(rev_values[:-1]) if x == rev_values[-1]] # when did this value occur before? List the following values indices
+            if len(prev_cases) > 8: #arbitrary decision on minimum number of occurrences
+                value_list = [x for i,x in enumerate(rev_values) if i in prev_cases] #submit based on what happened before
+            else:
+                value_list = rev_values[:] #not enough data, use the whole set instead
+            v = [s for s in (np.random.choice(value_list, self.num_predictions))] #randomly select from the value list and return as answer
+        else:
             """ Simple ARIMA """
                 # evaluate parameters
-            p_values = [0, 1, 2, 4, 6, 8, 10] #these are kind of arbitrary, but need to put a limit on it
-            d_values = range(0, 3) #arbitrary, but need to put a limit on it
-            q_values = range(0, 3) #arbitrary, but need to put a limit on it
-            best_order = self.evaluate_models(lagged_values, p_values, d_values, q_values)
-            arma_mod = ARIMA(lagged_values, order=best_order, trend='n')
+            print ('ARIMA')
+            p_values = [0, 1, 2, 4, 6, 8, 10, 25]
+            d_values = range(0, 3)
+            q_values = range(0, 3)
+            best_order = self.evaluate_models(rev_values, p_values, d_values, q_values)
+            arma_mod = ARIMA(rev_values, order=best_order, trend='n')
             model_fit = arma_mod.fit()
             point_est = model_fit.predict(len(lagged_values), len(lagged_values), dynamic=True)
             st_dev = np.std(lagged_values)
+            #v = list(np.linspace(start=point_est-2*st_dev,stop=point_est+2*st_dev, num=self.num_predictions))
             v = [s for s in (np.random.normal(point_est, st_dev, self.num_predictions))]
-
-        return sorted(v)
+            #v = [s for s in (np.linspace(start=point_est-2*st_dev,stop=point_est+2*st_dev, num=self.num_predictions))]
+        print (*v, sep = ", ")
+        return v
 
 
 
@@ -90,4 +99,4 @@ if __name__=="__main__":
     mw = MyCrawler(write_key=MY_MUID)
     mw.set_repository(
         url='https://github.com//spikeshr/microprediction/blob/master/Doodle_Fox.py')
-    mw.run(withdraw_all=False)
+    mw.run(withdraw_all=True)
