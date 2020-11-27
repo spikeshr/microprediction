@@ -13,7 +13,7 @@ class MyCrawler(MicroCrawler):
 
 
     def candidate_streams(self):
-        bad_names = [] # can use this to exclude troublesome streams
+        bad_names = ['electricity','emojitracker'] # can use this to exclude troublesome streams
         good_names = []
         candidate_names = [name for name, sponsor in self.get_streams_by_sponsor().items()] # if name[:1] != 'z' #exclude z streams
 
@@ -31,22 +31,23 @@ class MyCrawler(MicroCrawler):
     def sample(self, lagged_values, lagged_times=None, **ignored ):
         """ Find Unique Values to see if outcomes are discrete or continuous """
         uniques = np.unique(lagged_values)
-        if len(uniques) < 0.3*len(lagged_values): #arbitrary cutoff of 30% to determine whether outcomes are continuous or quantized
+        if len(uniques) < 0.2*len(lagged_values): #arbitrary cutoff of 20% to determine whether outcomes are continuous or quantized
             v = [s for s in (np.random.choice(lagged_values, self.num_predictions))] #randomly select from the lagged values and return as answer
         else:
-
+            rev_values = lagged_values[::-1] # our data are in reverse order, the AR model needs the opposite
             """ Simple Autoregression """
-            ARmodel = ar_select_order(lagged_values, maxlag=int(0.1*len(lagged_values)))
+            ARmodel = ar_select_order(rev_values, maxlag=int(0.1*len(rev_values)))
             model_fit = ARmodel.model.fit()
-            point_est = model_fit.predict(start=len(lagged_values), end=len(lagged_values), dynamic=False)
-            st_dev = np.std(lagged_values)
-            v = [s for s in (np.random.normal(point_est, st_dev, self.num_predictions))]
-
-        return sorted(v)
+            point_est = model_fit.predict(start=len(rev_values), end=len(rev_values), dynamic=False)
+            st_dev = np.std(rev_values)
+            #v = [s for s in (np.random.normal(point_est, st_dev, self.num_predictions))]
+            v = [s for s in (np.linspace(start=point_est-2*st_dev,stop=point_est+2*st_dev, num=self.num_predictions))] #spread the predictions out evenly
+            print (*v, sep = ", ")
+        return v
 
 
 if __name__=="__main__":
     mw = MyCrawler(write_key=MY_MUID)
     mw.set_repository(
         url='https://github.com//spikeshr/microprediction/blob/master/Fledge_Goat.py')
-    mw.run(withdraw_all=False)
+    mw.run(withdraw_all=True)
